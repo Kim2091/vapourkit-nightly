@@ -1,0 +1,127 @@
+name: Nightly Release
+
+# Controls when the workflow will run
+on:
+  # Nightly schedule
+  schedule:
+    # Run at 11 PM UTC every day
+    - cron: "0 23 * * *"
+  
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  setup:
+    permissions:
+      contents: none
+    runs-on: ubuntu-latest
+    outputs:
+      COMMITS: ${{ steps.get_commits.outputs.COMMITS }}
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          repository: Kim2091/vapourkit
+          fetch-depth: 0
+      
+      - name: Get commits last 24 hours
+        id: get_commits
+        run: echo "COMMITS=$(git rev-list --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD))" >> $GITHUB_OUTPUT
+
+  release:
+    needs: [setup]
+    if: ${{ needs.setup.outputs.COMMITS || github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    
+    steps:
+      - name: Get current time
+        uses: josStorer/get-current-time@v2.0.1
+        id: current-time
+        with:
+          format: YYYY-MM-DD
+      
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          repository: Kim2091/vapourkit
+          fetch-depth: 0
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Set nightly version
+        shell: bash
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          PKG_VERSION="${PKG_VERSION}-nightly.${{ steps.current-time.outputs.formattedTime }}"
+          npm version $PKG_VERSION --no-git-tag-version
+      
+      - name: Build nightly release
+        run: npm run build:all
+      
+      - name: Set file name env vars
+        id: step_one
+        shell: bash
+        run: |
+          echo "EXE=$(find ./release/ -iname *.exe -not -iname *.blockmap)" >> $GITHUB_ENV
+          echo "SEVEN_Z=$(find ./release/ -iname *.7z)" >> $GITHUB_ENV
+      
+      - name: Rename exe assets
+        if: ${{ env.EXE }}
+        shell: bash
+        run: mv "${{ env.EXE }}" "./release/Vapourkit-windows-nightly-${{ steps.current-time.outputs.formattedTime }}.exe"
+      
+      - name: Rename 7z assets
+        if: ${{ env.SEVEN_Z }}
+        shell: bash
+        run: mv "${{ env.SEVEN_Z }}" "./release/Vapourkit-windows-nightly-${{ steps.current-time.outputs.formattedTime }}.7z"
+      
+      - name: Delete blockmap assets
+        shell: bash
+        run: |
+          find ./release/ -iname "*.blockmap" -delete
+      
+      - name: Get commit history (past 24 hours)
+        id: commit_history
+        shell: bash
+        run: |
+          echo "Built on ${{ steps.current-time.outputs.formattedTime }}" > history.txt
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "" >> history.txt
+            echo "This is a manually triggered build." >> history.txt
+            echo "" >> history.txt
+            echo "Recent commits:" >> history.txt
+            git log -n 10 --no-merges --pretty=format:"[%h](https://github.com/Kim2091/vapourkit/commit/%H) - %s (%cr) <%an>" >> history.txt
+          else
+            echo "" >> history.txt
+            echo "Commits from the last 24 hours:" >> history.txt
+            git log --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD) --pretty=format:"[%h](https://github.com/Kim2091/vapourkit/commit/%H) - %s (%cr) <%an>" >> history.txt
+          fi
+      
+      - name: Read release history
+        id: read_release
+        shell: bash
+        run: |
+          r=$(cat ./history.txt)
+          r="${r//'%'/'%25'}"                               # Multiline escape sequences for %
+          r="${r//$'\n'/'%0A'}"                             # Multiline escape sequences for '\n'
+          r="${r//$'\r'/'%0D'}"                             # Multiline escape sequences for '\r'
+          echo "RELEASE_BODY=$r" >> $GITHUB_OUTPUT
+      
+      - name: Upload new release assets
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file_glob: true
+          file: ./release/Vapourkit-windows-nightly-*
+          tag: nightly-${{ steps.current-time.outputs.formattedTime }}
+          overwrite: true
+          body: |
+            ${{ steps.read_release.outputs.RELEASE_BODY }}
+          release_name: Nightly build from ${{ steps.current-time.outputs.formattedTime }}
+          prerelease: true

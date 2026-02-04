@@ -1,0 +1,17 @@
+# Ignore build artifacts if any local testing is done
+release/
+dist/
+node_modules/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
