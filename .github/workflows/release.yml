@@ -19,15 +19,17 @@ jobs:
     outputs:
       COMMITS: ${{ steps.get_commits.outputs.COMMITS }}
     steps:
-      - name: Checkout main repository
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          repository: Kim2091/vapourkit
           fetch-depth: 0
+      
+      - name: Checkout submodules
+        run: git submodule update --init --recursive --remote
       
       - name: Get commits last 24 hours
         id: get_commits
-        run: echo "COMMITS=$(git rev-list --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD))" >> $GITHUB_OUTPUT
+        run: cd ./vapourkit && echo "COMMITS=$(git rev-list --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD))" >> $GITHUB_OUTPUT
 
   release:
     needs: [setup]
@@ -41,66 +43,70 @@ jobs:
         with:
           format: YYYY-MM-DD
       
-      - name: Checkout main repository
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          repository: Kim2091/vapourkit
           fetch-depth: 0
+      
+      - name: Checkout submodules
+        run: git submodule update --init --recursive --remote
       
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       
       - name: Install dependencies
-        run: npm ci
+        run: cd ./vapourkit && npm ci
       
       - name: Set nightly version
         shell: bash
         run: |
+          cd ./vapourkit
           PKG_VERSION=$(node -p "require('./package.json').version")
           PKG_VERSION="${PKG_VERSION}-nightly.${{ steps.current-time.outputs.formattedTime }}"
           npm version $PKG_VERSION --no-git-tag-version
       
       - name: Build nightly release
-        run: npm run build:all
+        run: cd ./vapourkit && npm run build:all
       
       - name: Set file name env vars
         id: step_one
         shell: bash
         run: |
-          echo "EXE=$(find ./release/ -iname *.exe -not -iname *.blockmap)" >> $GITHUB_ENV
-          echo "SEVEN_Z=$(find ./release/ -iname *.7z)" >> $GITHUB_ENV
+          echo "EXE=$(find ./vapourkit/release/ -iname *.exe -not -iname *.blockmap)" >> $GITHUB_ENV
+          echo "SEVEN_Z=$(find ./vapourkit/release/ -iname *.7z)" >> $GITHUB_ENV
       
       - name: Rename exe assets
         if: ${{ env.EXE }}
         shell: bash
-        run: mv "${{ env.EXE }}" "./release/Vapourkit-windows-nightly-${{ steps.current-time.outputs.formattedTime }}.exe"
+        run: mv "${{ env.EXE }}" "./vapourkit/release/Vapourkit-windows-nightly-${{ steps.current-time.outputs.formattedTime }}.exe"
       
       - name: Rename 7z assets
         if: ${{ env.SEVEN_Z }}
         shell: bash
-        run: mv "${{ env.SEVEN_Z }}" "./release/Vapourkit-windows-nightly-${{ steps.current-time.outputs.formattedTime }}.7z"
+        run: mv "${{ env.SEVEN_Z }}" "./vapourkit/release/Vapourkit-windows-nightly-${{ steps.current-time.outputs.formattedTime }}.7z"
       
       - name: Delete blockmap assets
         shell: bash
         run: |
-          find ./release/ -iname "*.blockmap" -delete
+          find ./vapourkit/release/ -iname "*.blockmap" -delete
       
       - name: Get commit history (past 24 hours)
         id: commit_history
         shell: bash
         run: |
-          echo "Built on ${{ steps.current-time.outputs.formattedTime }}" > history.txt
+          cd ./vapourkit
+          echo "Built on ${{ steps.current-time.outputs.formattedTime }}" > ../history.txt
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "" >> history.txt
-            echo "This is a manually triggered build." >> history.txt
-            echo "" >> history.txt
-            echo "Recent commits:" >> history.txt
-            git log -n 10 --no-merges --pretty=format:"[%h](https://github.com/Kim2091/vapourkit/commit/%H) - %s (%cr) <%an>" >> history.txt
+            echo "" >> ../history.txt
+            echo "This is a manually triggered build." >> ../history.txt
+            echo "" >> ../history.txt
+            echo "Recent commits:" >> ../history.txt
+            git log -n 10 --no-merges --pretty=format:"[%h](https://github.com/Kim2091/vapourkit/commit/%H) - %s (%cr) <%an>" >> ../history.txt
           else
-            echo "" >> history.txt
-            echo "Commits from the last 24 hours:" >> history.txt
-            git log --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD) --pretty=format:"[%h](https://github.com/Kim2091/vapourkit/commit/%H) - %s (%cr) <%an>" >> history.txt
+            echo "" >> ../history.txt
+            echo "Commits from the last 24 hours:" >> ../history.txt
+            git log --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD) --pretty=format:"[%h](https://github.com/Kim2091/vapourkit/commit/%H) - %s (%cr) <%an>" >> ../history.txt
           fi
       
       - name: Read release history
@@ -118,7 +124,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file_glob: true
-          file: ./release/Vapourkit-windows-nightly-*
+          file: ./vapourkit/release/Vapourkit-windows-nightly-*
           tag: nightly-${{ steps.current-time.outputs.formattedTime }}
           overwrite: true
           body: |
