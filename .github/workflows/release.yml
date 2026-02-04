@@ -73,8 +73,8 @@ jobs:
         id: step_one
         shell: bash
         run: |
-          echo "EXE=$(find ./vapourkit/release/ -iname *.exe -not -iname *.blockmap)" >> $GITHUB_ENV
-          echo "SEVEN_Z=$(find ./vapourkit/release/ -iname *.7z)" >> $GITHUB_ENV
+          echo "EXE=$(find ./vapourkit/release/ -maxdepth 1 -iname "*.exe" -not -iname "*.blockmap")" >> $GITHUB_ENV
+          echo "SEVEN_Z=$(find ./vapourkit/release/ -maxdepth 1 -iname "*.7z")" >> $GITHUB_ENV
       
       - name: Rename exe assets
         if: ${{ env.EXE }}
