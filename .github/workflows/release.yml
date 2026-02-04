@@ -35,6 +35,8 @@ jobs:
     needs: [setup]
     if: ${{ needs.setup.outputs.COMMITS || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-latest
+    permissions:
+      contents: write
     
     steps:
       - name: Get current time
