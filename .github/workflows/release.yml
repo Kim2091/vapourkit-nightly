@@ -29,7 +29,11 @@ jobs:
       
       - name: Get commits last 24 hours
         id: get_commits
-        run: cd ./vapourkit && echo "COMMITS=$(git rev-list --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD))" >> $GITHUB_OUTPUT
+        run: |
+          cd ./vapourkit
+          echo "COMMITS<<EOF" >> $GITHUB_OUTPUT
+          git rev-list --no-merges HEAD --not $(git rev-list -n1 --before="24 hours" --first-parent HEAD) >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   release:
     needs: [setup]
