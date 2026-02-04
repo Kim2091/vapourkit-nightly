@@ -56,7 +56,7 @@ jobs:
           node-version: 20
       
       - name: Install dependencies
-        run: cd ./vapourkit && npm ci
+        run: cd ./vapourkit && npm install
       
       - name: Set nightly version
         shell: bash
