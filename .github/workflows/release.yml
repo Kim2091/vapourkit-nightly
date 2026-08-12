@@ -41,14 +41,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd vapourkit && npm install
+      - name: Install dependencies (retry transient downloads)
+        shell: pwsh
+        run: |
+          Push-Location vapourkit
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm install
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { exit $LASTEXITCODE }
+            Start-Sleep -Seconds (30 * $attempt)
+          }
       - name: Set nightly version
         shell: bash
         run: |
           cd vapourkit
           version=$(node -p "require('./package.json').version")
           npm version "${version}-nightly.${{ needs.setup.outputs.date }}" --no-git-tag-version
-      - run: cd vapourkit && npm run build:all
+      - name: Build Windows packages (retry transient downloads)
+        shell: pwsh
+        run: |
+          Push-Location vapourkit
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm run build:all
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { exit $LASTEXITCODE }
+            Start-Sleep -Seconds (30 * $attempt)
+          }
       - name: Prepare Windows assets
         shell: bash
         run: |
@@ -72,14 +90,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd vapourkit && npm install
+      - name: Install dependencies (retry transient downloads)
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if (cd vapourkit && npm install); then exit 0; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep "$((30 * attempt))"
+          done
       - name: Set nightly version
         shell: bash
         run: |
           cd vapourkit
           version=$(node -p "require('./package.json').version")
           npm version "${version}-nightly.${{ needs.setup.outputs.date }}" --no-git-tag-version
-      - run: cd vapourkit && npm run build:linux
+      - name: Build Linux AppImage (retry transient downloads)
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if (cd vapourkit && npm run build:linux); then exit 0; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep "$((30 * attempt))"
+          done
       - name: Prepare AppImage asset
         shell: bash
         run: |
