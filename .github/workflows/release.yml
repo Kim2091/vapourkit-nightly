@@ -130,7 +130,10 @@ jobs:
             delimiter="VAPOURKIT_RELEASE_BODY_${RANDOM}_${RANDOM}"
             echo "body<<${delimiter}"
             cat ../history.txt
-            echo "${delimiter}"
+            # git log with --pretty=format does not guarantee a trailing
+            # newline. The delimiter must occupy a line by itself for GitHub
+            # Actions to accept the multiline output.
+            printf '\n%s\n' "${delimiter}"
           } >> "$GITHUB_OUTPUT"
       - uses: svenstaro/upload-release-action@v2
         with:
