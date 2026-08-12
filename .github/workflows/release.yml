@@ -127,9 +127,10 @@ jobs:
             fi
           } > ../history.txt
           {
-            echo 'body<<EOF'
+            delimiter="VAPOURKIT_RELEASE_BODY_${RANDOM}_${RANDOM}"
+            echo "body<<${delimiter}"
             cat ../history.txt
-            echo EOF
+            echo "${delimiter}"
           } >> "$GITHUB_OUTPUT"
       - uses: svenstaro/upload-release-action@v2
         with:
