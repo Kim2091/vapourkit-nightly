@@ -12,20 +12,21 @@ Check the [Releases](../../releases) page for the latest nightly build.
 
 ## Build Information
 
-- **Platform**: Windows x64 only
+- **Platforms**: Windows x64 and Linux x64
 - **Schedule**: Daily at 11 PM UTC (if there are new commits)
 - **Manual Triggers**: Can also be triggered manually via GitHub Actions
 - **Formats**: 
   - `.exe` - NSIS installer
   - `.7z` - Portable archive
+  - `.AppImage` - Linux portable application
 
 ## How it works
 
 This repository uses GitHub Actions to:
 1. Check for commits in the main Vapourkit repository from the last 24 hours
-2. Clone the main repository
-3. Build Windows installers and portable versions
-4. Create a prerelease with the build artifacts
+2. Clone the `experimental-linux` branch of the main repository
+3. Build Windows installers/portable versions and a Linux AppImage
+4. Create a prerelease containing all build artifacts
 
 ## Stability
 
