@@ -51,16 +51,25 @@ jobs:
             if ($attempt -eq 3) { exit $LASTEXITCODE }
             Start-Sleep -Seconds (30 * $attempt)
           }
+      # Deliberately NOT `npm run build:both`. That script omits --publish,
+      # so electron-builder detects CI, implicitly tries to publish to GitHub
+      # and dies on the missing GH_TOKEN *after* packaging successfully. The
+      # steps below are build:both with an explicit --publish never.
       - name: Build Windows packages (retry transient downloads)
         shell: pwsh
         run: |
           Push-Location vapourkit
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            npm run build:both
+            npm run build
+            if ($LASTEXITCODE -eq 0) {
+              npx electron-builder --win nsis 7z --x64 --publish never
+            }
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) { exit $LASTEXITCODE }
             Start-Sleep -Seconds (30 * $attempt)
           }
+          npx tsx scripts/renamePortable.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Prepare Windows assets
         shell: bash
         run: |
