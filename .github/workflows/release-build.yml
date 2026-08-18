@@ -1,0 +1,136 @@
+# TEMPORARY — stable release builds, manual dispatch only.
+#
+# Unlike release.yml this does NOT use the `vapourkit` submodule (which tracks
+# the experimental-linux branch) and does NOT append a -nightly suffix, so the
+# packaged app reports its real version internally. It publishes nothing: the
+# installer, portable archive and AppImage are uploaded as workflow artifacts.
+#
+# Delete this file once the v2.0.0 assets have been downloaded.
+name: Release Build (temporary)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag, branch or SHA of Kim2091/vapourkit to build"
+        required: true
+        default: "v2.0.0"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Kim2091/vapourkit
+          ref: ${{ inputs.ref }}
+          path: vapourkit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Report build source
+        shell: bash
+        run: |
+          cd vapourkit
+          version=$(node -p "require('./package.json').version")
+          echo "ref:     ${{ inputs.ref }}"
+          echo "commit:  $(git rev-parse HEAD)"
+          echo "version: ${version}"
+          # A stable build must not carry a prerelease suffix. If this fires,
+          # package.json on the built ref is not what you think it is.
+          case "$version" in
+            *-*) echo "::error::version '${version}' has a prerelease suffix"; exit 1 ;;
+          esac
+      - name: Install dependencies (retry transient downloads)
+        shell: pwsh
+        run: |
+          Push-Location vapourkit
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm install
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { exit $LASTEXITCODE }
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+      - name: Build Windows packages (retry transient downloads)
+        shell: pwsh
+        run: |
+          Push-Location vapourkit
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm run build:both
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { exit $LASTEXITCODE }
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+      - name: Prepare Windows assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          # build:both already names these Vapourkit-<version>-SETUP.exe and
+          # Vapourkit-<version>-PORTABLE.7z, so keep electron-builder's names.
+          find vapourkit/release -maxdepth 1 -type f -iname '*.exe' ! -iname '*.blockmap' -exec cp {} release-assets/ \;
+          find vapourkit/release -maxdepth 1 -type f -iname '*.7z' -exec cp {} release-assets/ \;
+          ls -la release-assets
+          test -n "$(find release-assets -maxdepth 1 -type f -name '*.exe' -print -quit)"
+          test -n "$(find release-assets -maxdepth 1 -type f -name '*.7z' -print -quit)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vapourkit-windows
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Kim2091/vapourkit
+          ref: ${{ inputs.ref }}
+          path: vapourkit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Report build source
+        shell: bash
+        run: |
+          cd vapourkit
+          version=$(node -p "require('./package.json').version")
+          echo "ref:     ${{ inputs.ref }}"
+          echo "commit:  $(git rev-parse HEAD)"
+          echo "version: ${version}"
+          case "$version" in
+            *-*) echo "::error::version '${version}' has a prerelease suffix"; exit 1 ;;
+          esac
+      - name: Install dependencies (retry transient downloads)
+        shell: bash
+        run: |
+          cd vapourkit
+          for attempt in 1 2 3; do
+            if npm install; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep "$((30 * attempt))"
+          done
+      - name: Build Linux AppImage (retry transient downloads)
+        shell: bash
+        run: |
+          cd vapourkit
+          for attempt in 1 2 3; do
+            if npm run build:linux; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep "$((30 * attempt))"
+          done
+      - name: Prepare AppImage asset
+        shell: bash
+        run: |
+          appimage=$(find vapourkit/release -maxdepth 1 -type f -name '*.AppImage' -print -quit)
+          test -n "$appimage"
+          version=$(node -p "require('./vapourkit/package.json').version")
+          mkdir -p release-assets
+          cp "$appimage" "release-assets/Vapourkit-${version}-x86_64.AppImage"
+          ls -la release-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vapourkit-linux
+          path: release-assets/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
