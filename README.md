@@ -2,6 +2,10 @@
 
 This repository hosts automated nightly builds of [Vapourkit](https://github.com/Kim2091/vapourkit).
 
+Please consider donating to help fund development (and keep me housed)!
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/J3J3BCC3L)
+
 ## What are nightly builds?
 
 Nightly builds are automated builds that run every night (at 11 PM UTC) if there have been commits to the main Vapourkit repository in the last 24 hours. These builds contain the latest features and fixes but may be less stable than official releases.
