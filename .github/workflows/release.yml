@@ -4,6 +4,17 @@ on:
   schedule:
     - cron: "0 23 * * *"
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Vapourkit branch to build (anything but main is released under its own nightly-<branch>-<date> tag)"
+        default: main
+        required: false
+
+env:
+  VK_BRANCH: ${{ inputs.branch || 'main' }}
+  # Empty for main, "-<branch>" otherwise, so a feature-branch build never
+  # overwrites the regular nightly's tag or assets
+  VK_SUFFIX: ${{ (inputs.branch && inputs.branch != 'main') && format('-{0}', inputs.branch) || '' }}
 
 jobs:
   setup:
@@ -17,7 +28,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: git submodule update --init --recursive --remote
+      - name: Check out the Vapourkit branch
+        shell: bash
+        run: |
+          git submodule update --init --recursive --remote
+          git -C vapourkit fetch origin "$VK_BRANCH"
+          git -C vapourkit checkout --detach FETCH_HEAD
       - uses: josStorer/get-current-time@v2.0.1
         id: current-time
         with:
@@ -37,7 +53,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - run: git submodule update --init --recursive --remote
+      - name: Check out the Vapourkit branch
+        shell: bash
+        run: |
+          git submodule update --init --recursive --remote
+          git -C vapourkit fetch origin "$VK_BRANCH"
+          git -C vapourkit checkout --detach FETCH_HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -71,8 +92,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets
-          find vapourkit/release -maxdepth 1 -type f -iname '*.exe' ! -iname '*.blockmap' -exec cp {} "release-assets/Vapourkit-windows-nightly-${{ needs.setup.outputs.date }}.exe" \;
-          find vapourkit/release -maxdepth 1 -type f -iname '*.7z' -exec cp {} "release-assets/Vapourkit-windows-nightly-${{ needs.setup.outputs.date }}.7z" \;
+          find vapourkit/release -maxdepth 1 -type f -iname '*.exe' ! -iname '*.blockmap' -exec cp {} "release-assets/Vapourkit-windows-nightly${{ env.VK_SUFFIX }}-${{ needs.setup.outputs.date }}.exe" \;
+          find vapourkit/release -maxdepth 1 -type f -iname '*.7z' -exec cp {} "release-assets/Vapourkit-windows-nightly${{ env.VK_SUFFIX }}-${{ needs.setup.outputs.date }}.7z" \;
           test -n "$(find release-assets -maxdepth 1 -type f -name '*.exe' -print -quit)"
       - uses: actions/upload-artifact@v4
         with:
@@ -86,7 +107,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: git submodule update --init --recursive --remote
+      - name: Check out the Vapourkit branch
+        shell: bash
+        run: |
+          git submodule update --init --recursive --remote
+          git -C vapourkit fetch origin "$VK_BRANCH"
+          git -C vapourkit checkout --detach FETCH_HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -118,7 +144,7 @@ jobs:
           appimage=$(find vapourkit/release -maxdepth 1 -type f -name '*.AppImage' -print -quit)
           test -n "$appimage"
           mkdir -p release-assets
-          cp "$appimage" "release-assets/Vapourkit-linux-nightly-${{ needs.setup.outputs.date }}.AppImage"
+          cp "$appimage" "release-assets/Vapourkit-linux-nightly${{ env.VK_SUFFIX }}-${{ needs.setup.outputs.date }}.AppImage"
       - uses: actions/upload-artifact@v4
         with:
           name: nightly-linux
@@ -135,7 +161,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: git submodule update --init --recursive --remote
+      - name: Check out the Vapourkit branch
+        shell: bash
+        run: |
+          git submodule update --init --recursive --remote
+          git -C vapourkit fetch origin "$VK_BRANCH"
+          git -C vapourkit checkout --detach FETCH_HEAD
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
@@ -146,7 +177,7 @@ jobs:
         run: |
           cd vapourkit
           {
-            echo "Built on ${{ needs.setup.outputs.date }}"
+            echo "Built on ${{ needs.setup.outputs.date }} from the \`$VK_BRANCH\` branch"
             echo
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
               echo "This is a manually triggered build."
@@ -171,9 +202,9 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file_glob: true
-          file: release-assets/Vapourkit-*-nightly-*
-          tag: nightly-${{ needs.setup.outputs.date }}
+          file: release-assets/Vapourkit-*-nightly*
+          tag: nightly${{ env.VK_SUFFIX }}-${{ needs.setup.outputs.date }}
           overwrite: true
           body: ${{ steps.notes.outputs.body }}
-          release_name: Nightly build from ${{ needs.setup.outputs.date }}
+          release_name: Nightly build${{ env.VK_SUFFIX && format(' ({0})', env.VK_BRANCH) || '' }} from ${{ needs.setup.outputs.date }}
           prerelease: true
